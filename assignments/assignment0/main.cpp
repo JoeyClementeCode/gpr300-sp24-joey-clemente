@@ -6,6 +6,9 @@
 #include <ew/shader.h>
 #include <ew/model.h>
 #include <ew/camera.h>
+#include <ew/transform.h>
+#include <ew/cameraController.h>
+#include <ew/texture.h>
 
 #include <GLFW/glfw3.h>
 #include <imgui.h>
@@ -21,6 +24,17 @@ int screenWidth = 1080;
 int screenHeight = 720;
 float prevFrameTime;
 float deltaTime;
+ew::Transform monkeyTransform;
+ew::Camera camera;
+ew::CameraController cameraController;
+
+struct Material {
+	float AmbientCo = 1.0;
+	float DiffuseCo = 0.5;
+	float SpecualarCo = 0.5;
+	float Shininess = 128;
+}material;
+
 
 int main() {
 	GLFWwindow* window = initWindow("Assignment 0", screenWidth, screenHeight);
@@ -30,11 +44,12 @@ int main() {
 	ew::Model monkeyModel = ew::Model("assets/suzanne.obj");
 
 	// Camera Setup
-	ew::Camera camera;
 	camera.position = glm::vec3(0.0f, 0.0f, 5.0f);
 	camera.target = glm::vec3(0.0f, 0.0f, 0.0f);
 	camera.aspectRatio = (float)screenWidth / screenHeight;
 	camera.fov = 60.0f;
+
+	GLuint brickTexture = ew::loadTexture("assets/brick_color.jpg");
 
 	glEnable(GL_CULL_FACE);
 	glCullFace(GL_BACK);
@@ -49,11 +64,21 @@ int main() {
 		deltaTime = time - prevFrameTime;
 		prevFrameTime = time;
 
+		monkeyTransform.rotation = glm::rotate(monkeyTransform.rotation, deltaTime, glm::vec3(0.0, 1.0, 0.0));
+		cameraController.move(window, &camera, deltaTime);
+
 		//RENDER
 		glClearColor(0.6f,0.8f,0.92f,1.0f);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+		glBindTextureUnit(0, brickTexture);
 		shader.use();
-		shader.setMat4("_Model", glm::mat4(1.0f));
+		shader.setInt("_MainTex", 0);
+		shader.setFloat("_Material.AmbientCo", material.AmbientCo);
+		shader.setFloat("_Material.DiffuseCo", material.DiffuseCo);
+		shader.setFloat("_Material.SpecualarCo", material.SpecualarCo);
+		shader.setFloat("_Material.Shininess", material.Shininess);
+		shader.setVec3("_EyePos", camera.position);
+		shader.setMat4("_Model", monkeyTransform.modelMatrix());
 		shader.setMat4("_ViewProjection", camera.projectionMatrix() * camera.viewMatrix());
 		monkeyModel.draw();
 
@@ -64,13 +89,32 @@ int main() {
 	printf("Shutting down...");
 }
 
+void resetCamera(ew::Camera* camera, ew::CameraController* controller) {
+	camera->position = glm::vec3(0, 0, 5.0f);
+	camera->target = glm::vec3(0);
+	controller->yaw = controller->pitch = 0;
+}
+
 void drawUI() {
 	ImGui_ImplGlfw_NewFrame();
 	ImGui_ImplOpenGL3_NewFrame();
 	ImGui::NewFrame();
 
 	ImGui::Begin("Settings");
-	ImGui::Text("Add Controls Here!");
+
+	if (ImGui::CollapsingHeader("Material")) 
+	{
+		ImGui::SliderFloat("AmbientK", &material.AmbientCo, 0.0f, 1.0f);
+		ImGui::SliderFloat("DiffuseK", &material.DiffuseCo, 0.0f, 1.0f);
+		ImGui::SliderFloat("SpecularK", &material.SpecualarCo, 0.0f, 1.0f);
+		ImGui::SliderFloat("Shininess", &material.Shininess, 2.0f, 1024.0f);
+	}
+
+
+	if (ImGui::Button("Reset Camera")) 
+	{
+		resetCamera(&camera, &cameraController);
+	}
 	ImGui::End();
 
 	ImGui::Render();
