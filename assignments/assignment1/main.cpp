@@ -99,8 +99,6 @@ int main() {
 
 		// FIRST PASS
 		glBindFramebuffer(GL_FRAMEBUFFER, fbo);
-		glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
-		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 		glEnable(GL_DEPTH_TEST);
 
 		// SECOND PASS
@@ -120,18 +118,23 @@ int main() {
 
 
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
-		glDisable(GL_DEPTH_TEST);
 		glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT);
 
+
+		glBindTextureUnit(1, frameBufferTexture);
 		postProcessShader.use();
+		postProcessShader.setInt("_ScreenTex", 1);
+		glDisable(GL_DEPTH_TEST);
 
 		drawUI();
 
 		glfwSwapBuffers(window);
+		glfwPollEvents();
 	}
 
 	glDeleteFramebuffers(1, &fbo);
+	glDeleteRenderbuffers(1, &rbo);
 
 	printf("Shutting down...");
 }
