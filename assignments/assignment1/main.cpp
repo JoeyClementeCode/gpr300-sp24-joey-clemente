@@ -51,9 +51,7 @@ int main() {
 	camera.aspectRatio = (float)screenWidth / screenHeight;
 	camera.fov = 60.0f;
 
-	GLuint brickTexture = ew::loadTexture("assets/brick_color.jpg");
-
-	// Frame Buffer Stuff Assignment 1
+	/*// Frame Buffer Stuff Assignment 1
 	unsigned int fbo;
 	glGenFramebuffers(1, &fbo);
 	glBindFramebuffer(GL_FRAMEBUFFER, fbo);
@@ -67,7 +65,7 @@ int main() {
 	glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, 0);
 
 	// Render Buffers
-	unsigned int rbo;
+
 	glGenRenderbuffers(1, &rbo);
 	glBindRenderbuffer(GL_RENDERBUFFER, rbo);
 	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, screenWidth, screenHeight);
@@ -79,11 +77,34 @@ int main() {
 		printf("YIPEEEEEEEEEE");
 	}
 
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);*/
+
+	unsigned int fbo;
+	glCreateFramebuffers(1, &fbo);
+	glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+
+	unsigned int frameBufferTexture;
+	glGenTextures(1, &frameBufferTexture);
+	glBindTexture(GL_TEXTURE_2D, frameBufferTexture);
+	glTexStorage2D(GL_TEXTURE_2D, 1, GL_RGBA8, screenWidth, screenHeight);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+	unsigned int depth_texture;
+	glGenTextures(1, &depth_texture);
+	glBindTexture(GL_TEXTURE_2D, depth_texture);
+	glTexStorage2D(GL_TEXTURE_2D, 1, GL_DEPTH_COMPONENT32F, screenWidth, screenHeight);
+	glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, frameBufferTexture, 0);
+	glFramebufferTexture(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, depth_texture, 0);
+
+	static const GLenum draw_buffers[] = { GL_COLOR_ATTACHMENT0 };
+	glDrawBuffers(1, draw_buffers);
 
 	glEnable(GL_CULL_FACE);
 	glCullFace(GL_BACK);
 	glEnable(GL_DEPTH_TEST);
+
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
 	glfwSetFramebufferSizeCallback(window, framebufferSizeCallback);
 
@@ -99,14 +120,13 @@ int main() {
 
 		// FIRST PASS
 		glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+		glClearColor(0.6f, 0.8f, 0.92f, 1.0f);
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 		glEnable(GL_DEPTH_TEST);
 
 		// SECOND PASS
-		glClearColor(0.6f,0.8f,0.92f,1.0f);
-		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-		glBindTextureUnit(0, brickTexture);
+
 		sceneShader.use();
-		sceneShader.setInt("_MainTex", 0);
 		sceneShader.setFloat("_Material.AmbientCo", material.AmbientCo);
 		sceneShader.setFloat("_Material.DiffuseCo", material.DiffuseCo);
 		sceneShader.setFloat("_Material.SpecualarCo", material.SpecualarCo);
@@ -116,16 +136,27 @@ int main() {
 		sceneShader.setMat4("_ViewProjection", camera.projectionMatrix() * camera.viewMatrix());
 		monkeyModel.draw();
 
-
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
-		glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
-		glClear(GL_COLOR_BUFFER_BIT);
+		glClearColor(0.6f, 0.8f, 0.92f, 1.0f);
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+		glBindTexture(GL_TEXTURE_2D, frameBufferTexture);
 
-		glBindTextureUnit(1, frameBufferTexture);
-		postProcessShader.use();
-		postProcessShader.setInt("_ScreenTex", 1);
+		glBindTextureUnit(0, frameBufferTexture);
+		sceneShader.use();
+		sceneShader.setFloat("_Material.AmbientCo", material.AmbientCo);
+		sceneShader.setFloat("_Material.DiffuseCo", material.DiffuseCo);
+		sceneShader.setFloat("_Material.SpecualarCo", material.SpecualarCo);
+		sceneShader.setFloat("_Material.Shininess", material.Shininess);
+		sceneShader.setVec3("_EyePos", camera.position);
+		sceneShader.setMat4("_Model", monkeyTransform.modelMatrix());
+		sceneShader.setMat4("_ViewProjection", camera.projectionMatrix() * camera.viewMatrix());
+		monkeyModel.draw();
+		//postProcessShader.use();
+		//postProcessShader.setInt("_ScreenTex", 1);
 		glDisable(GL_DEPTH_TEST);
+
+		glBindTexture(GL_TEXTURE_2D, 0);
 
 		drawUI();
 
@@ -133,8 +164,8 @@ int main() {
 		glfwPollEvents();
 	}
 
-	glDeleteFramebuffers(1, &fbo);
-	glDeleteRenderbuffers(1, &rbo);
+	//glDeleteFramebuffers(1, &fbo);
+	//glDeleteRenderbuffers(1, &rbo);
 
 	printf("Shutting down...");
 }
