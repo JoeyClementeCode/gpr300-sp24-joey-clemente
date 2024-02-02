@@ -90,12 +90,19 @@ int main() {
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
+
 	unsigned int depth_texture;
 	glGenTextures(1, &depth_texture);
 	glBindTexture(GL_TEXTURE_2D, depth_texture);
-	glTexStorage2D(GL_TEXTURE_2D, 1, GL_DEPTH_COMPONENT32F, screenWidth, screenHeight);
+	glTexStorage2D(GL_TEXTURE_2D, 1, GL_DEPTH_COMPONENT16, screenWidth, screenHeight);
+
+
 	glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, frameBufferTexture, 0);
 	glFramebufferTexture(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, depth_texture, 0);
+
+	unsigned int dummyVAO;
+	glCreateVertexArrays(1, &dummyVAO);
+
 
 	static const GLenum draw_buffers[] = { GL_COLOR_ATTACHMENT0 };
 	glDrawBuffers(1, draw_buffers);
@@ -120,43 +127,29 @@ int main() {
 
 		// FIRST PASS
 		glBindFramebuffer(GL_FRAMEBUFFER, fbo);
-		glClearColor(0.6f, 0.8f, 0.92f, 1.0f);
+		glViewport(0, 0, screenWidth, screenHeight);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-		glEnable(GL_DEPTH_TEST);
+
+
+		sceneShader.use();
+		sceneShader.setFloat("_Material.AmbientCo", material.AmbientCo);
+		sceneShader.setFloat("_Material.DiffuseCo", material.DiffuseCo);
+		sceneShader.setFloat("_Material.SpecualarCo", material.SpecualarCo);
+		sceneShader.setFloat("_Material.Shininess", material.Shininess);
+		sceneShader.setVec3("_EyePos", camera.position);
+		sceneShader.setMat4("_Model", monkeyTransform.modelMatrix());
+		sceneShader.setMat4("_ViewProjection", camera.projectionMatrix() * camera.viewMatrix());
+		monkeyModel.draw();
 
 		// SECOND PASS
-
-		sceneShader.use();
-		sceneShader.setFloat("_Material.AmbientCo", material.AmbientCo);
-		sceneShader.setFloat("_Material.DiffuseCo", material.DiffuseCo);
-		sceneShader.setFloat("_Material.SpecualarCo", material.SpecualarCo);
-		sceneShader.setFloat("_Material.Shininess", material.Shininess);
-		sceneShader.setVec3("_EyePos", camera.position);
-		sceneShader.setMat4("_Model", monkeyTransform.modelMatrix());
-		sceneShader.setMat4("_ViewProjection", camera.projectionMatrix() * camera.viewMatrix());
-		monkeyModel.draw();
-
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
-		glClearColor(0.6f, 0.8f, 0.92f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-		glBindTexture(GL_TEXTURE_2D, frameBufferTexture);
-
+		postProcessShader.use();
+		
 		glBindTextureUnit(0, frameBufferTexture);
-		sceneShader.use();
-		sceneShader.setFloat("_Material.AmbientCo", material.AmbientCo);
-		sceneShader.setFloat("_Material.DiffuseCo", material.DiffuseCo);
-		sceneShader.setFloat("_Material.SpecualarCo", material.SpecualarCo);
-		sceneShader.setFloat("_Material.Shininess", material.Shininess);
-		sceneShader.setVec3("_EyePos", camera.position);
-		sceneShader.setMat4("_Model", monkeyTransform.modelMatrix());
-		sceneShader.setMat4("_ViewProjection", camera.projectionMatrix() * camera.viewMatrix());
-		monkeyModel.draw();
-		//postProcessShader.use();
-		//postProcessShader.setInt("_ScreenTex", 1);
-		glDisable(GL_DEPTH_TEST);
-
-		glBindTexture(GL_TEXTURE_2D, 0);
+		glBindVertexArray(dummyVAO);
+		glDrawArrays(GL_TRIANGLES, 0, 6);
 
 		drawUI();
 

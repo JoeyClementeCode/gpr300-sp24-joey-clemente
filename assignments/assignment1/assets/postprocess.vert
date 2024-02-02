@@ -1,8 +1,9 @@
 #version 450
-out vec2 TexCoords;
-
-void main() {
-        vec2 vertices[3]=vec2[3](vec2(-1,-1), vec2(3,-1), vec2(-1, 3));
-        gl_Position = vec4(vertices[gl_VertexID],0,1);
-        TexCoords = 0.5 * gl_Position.xy + vec2(0.5);
+out vec2 UV;
+void main()
+{
+	float u = (((uint(gl_VertexID)+2u) / 3u) % 2u);
+	float v = (((uint(gl_VertexID)+1u) / 3u) % 2u);
+	UV = vec2(u,v);
+	gl_Position = vec4(-1.0+u*2.0,-1.0+v*2.0,0.0,1.0);
 }
