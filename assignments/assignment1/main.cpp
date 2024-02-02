@@ -36,6 +36,13 @@ struct Material {
 	float Shininess = 128;
 }material;
 
+struct ColorCorrect {
+	float Exposure = 1.0;
+	float Contrast = 1.0;
+	float Brightness = 1.0;
+	glm::vec3 colorFilter = glm::vec3(1);
+}colorCorrect;
+
 
 int main() {
 	GLFWwindow* window = initWindow("Assignment 0", screenWidth, screenHeight);
@@ -86,10 +93,9 @@ int main() {
 	unsigned int frameBufferTexture;
 	glGenTextures(1, &frameBufferTexture);
 	glBindTexture(GL_TEXTURE_2D, frameBufferTexture);
-	glTexStorage2D(GL_TEXTURE_2D, 1, GL_RGBA8, screenWidth, screenHeight);
+	glTexStorage2D(GL_TEXTURE_2D, 1, GL_RGBA16, screenWidth, screenHeight);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
 
 	unsigned int depth_texture;
 	glGenTextures(1, &depth_texture);
@@ -146,6 +152,11 @@ int main() {
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 		postProcessShader.use();
+		postProcessShader.setFloat("_Exposure", colorCorrect.Exposure);
+		postProcessShader.setFloat("_Contrast", colorCorrect.Contrast);
+		postProcessShader.setFloat("_Brightness", colorCorrect.Brightness);
+		postProcessShader.setVec3("_ColorFiltering", colorCorrect.colorFilter);
+
 		
 		glBindTextureUnit(0, frameBufferTexture);
 		glBindVertexArray(dummyVAO);
@@ -182,6 +193,9 @@ void drawUI() {
 		ImGui::SliderFloat("DiffuseK", &material.DiffuseCo, 0.0f, 1.0f);
 		ImGui::SliderFloat("SpecularK", &material.SpecualarCo, 0.0f, 1.0f);
 		ImGui::SliderFloat("Shininess", &material.Shininess, 2.0f, 1024.0f);
+		ImGui::SliderFloat("Exposure", &colorCorrect.Exposure, 0.0f, 2.0f);
+		ImGui::SliderFloat("Contrast", &colorCorrect.Contrast, 0.0f, 2.0f);
+		ImGui::SliderFloat("Brightness", &colorCorrect.Brightness, 0.0f, 2.0f);
 	}
 
 
