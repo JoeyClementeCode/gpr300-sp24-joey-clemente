@@ -193,9 +193,14 @@ void drawUI() {
 		ImGui::SliderFloat("DiffuseK", &material.DiffuseCo, 0.0f, 1.0f);
 		ImGui::SliderFloat("SpecularK", &material.SpecualarCo, 0.0f, 1.0f);
 		ImGui::SliderFloat("Shininess", &material.Shininess, 2.0f, 1024.0f);
+	}
+
+	if (ImGui::CollapsingHeader("Color Correction"))
+	{
 		ImGui::SliderFloat("Exposure", &colorCorrect.Exposure, 0.0f, 2.0f);
 		ImGui::SliderFloat("Contrast", &colorCorrect.Contrast, 0.0f, 2.0f);
 		ImGui::SliderFloat("Brightness", &colorCorrect.Brightness, 0.0f, 2.0f);
+		ImGui::ColorEdit3("Color Filtering", &colorCorrect.colorFilter.r);
 	}
 
 

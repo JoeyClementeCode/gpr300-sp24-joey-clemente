@@ -16,7 +16,17 @@ float greyscale(vec3 color)
     return dot(color, vec3(0.299, 0.587, 0.114));
 }
 
-// Narcowicz ACES Tonemapping
+vec3 tonemap(vec3 col)
+{
+    float a = 2.51f;
+    float b = 0.03f;
+    float c = 2.43f;
+    float d = 0.59f;
+    float e = 0.14f;
+    return ((col*(a*col+b))/(col*(c*col+d)+e));
+}
+
+// Color Correction + Narcowicz ACES Tonemapping
 void main()
 {
     vec3 col = texture(_ColorBuffer, UV).rgb;
@@ -29,6 +39,8 @@ void main()
 
     // Color Filtering
     col = max(vec3(0), col * _ColorFiltering);
+
+    col = clamp(tonemap(col), 0.0, 1.0);
                 
     FragColor = vec4(col, 1.0);
 }
