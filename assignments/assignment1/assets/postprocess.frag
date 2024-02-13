@@ -37,9 +37,6 @@ void main()
     // Contrast + Brightness
     col = max(vec3(0), _Contrast * (col - 0.5) + 0.5 + _Brightness);
 
-    // Color Filtering
-    col = max(vec3(0), col * _ColorFiltering);
-
     col = clamp(tonemap(col), 0.0, 1.0);
                 
     FragColor = vec4(col, 1.0);

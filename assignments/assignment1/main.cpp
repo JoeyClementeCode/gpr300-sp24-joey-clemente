@@ -9,6 +9,7 @@
 #include <ew/transform.h>
 #include <ew/cameraController.h>
 #include <ew/texture.h>
+#include <ew/procGen.h>
 
 
 #include <GLFW/glfw3.h>
@@ -51,6 +52,7 @@ int main() {
 	ew::Shader sceneShader = ew::Shader("assets/lit.vert", "assets/lit.frag");
 	ew::Shader postProcessShader = ew::Shader("assets/postprocess.vert", "assets/postprocess.frag");
 	ew::Model monkeyModel = ew::Model("assets/suzanne.obj");
+	ew::Mesh planeMesh = ew::Mesh(ew::createPlane(10, 10, 5));
 
 	// Texture Loading
 	GLuint brickTexture = ew::loadTexture("assets/brick_color.jpg");
@@ -128,6 +130,7 @@ int main() {
 		sceneShader.setMat4("_Model", monkeyTransform.modelMatrix());
 		sceneShader.setMat4("_ViewProjection", camera.projectionMatrix() * camera.viewMatrix());
 		monkeyModel.draw();
+		planeMesh.draw();
 
 		// SECOND PASS (Back to Base Backbuffer)
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
