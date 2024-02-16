@@ -18,7 +18,7 @@
 
 void framebufferSizeCallback(GLFWwindow* window, int width, int height);
 GLFWwindow* initWindow(const char* title, int width, int height);
-void drawUI();
+void drawUI(unsigned int shadowMap);
 
 //Global state
 int screenWidth = 1080;
@@ -46,7 +46,7 @@ struct ColorCorrect {
 }colorCorrect;
 
 struct Light {
-	glm::vec3 lightDirection = glm::vec3(0.0, 1.0, 0.0);
+	glm::vec3 lightDirection = glm::vec3(0.0, -1.0, 0.0);
 	glm::vec3 lightColor = glm::vec3(1);
 }light;
 
@@ -70,15 +70,16 @@ int main() {
 	camera.aspectRatio = (float)screenWidth / screenHeight;
 	camera.fov = 60.0f;
 
+	planeTransform.position = glm::vec3(0.0f, -1.0f, 0.0f);
+
 	lightCamera.target = glm::vec3(0.0f, 0.0f, 0.0f);
 	lightCamera.position = lightCamera.target - light.lightDirection * 5.0f;
 	lightCamera.orthographic = true;
 	lightCamera.orthoHeight = 5.0f;
 	lightCamera.nearPlane = 0.01f;
-	lightCamera.farPlane = 10.0f;
+	lightCamera.farPlane = 25.0f;
 	lightCamera.aspectRatio = 1;
 
-	// FBO Creation
 	unsigned int fbo;
 	glCreateFramebuffers(1, &fbo);
 	glBindFramebuffer(GL_FRAMEBUFFER, fbo);
@@ -91,8 +92,15 @@ int main() {
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
+	// Depth Buffer Creation
+	unsigned int depth_texture;
+	glGenTextures(1, &depth_texture);
+	glBindTexture(GL_TEXTURE_2D, depth_texture);
+	glTexStorage2D(GL_TEXTURE_2D, 1, GL_DEPTH_COMPONENT16, screenWidth, screenHeight);
+
 	// Assigning
 	glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, frameBufferTexture, 0);
+	glFramebufferTexture(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, depth_texture, 0);
 
 	// Shadow Map and Buffer Creation
 	unsigned int shadowFBO, shadowMap;
@@ -126,6 +134,7 @@ int main() {
 	glEnable(GL_DEPTH_TEST);
 
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	glBindTexture(GL_TEXTURE_2D, 0);
 
 	glfwSetFramebufferSizeCallback(window, framebufferSizeCallback);
 
@@ -151,10 +160,11 @@ int main() {
 		glCullFace(GL_FRONT);
 
 		shadowShader.use();
-		shadowShader.setMat4("_LightViewMatrix", lightMatrix);
+		shadowShader.setMat4("_ViewProjection", lightMatrix);
 		shadowShader.setMat4("_Model", monkeyTransform.modelMatrix());
 		monkeyModel.draw();
-		//planeMesh.draw();
+		shadowShader.setMat4("_Model", planeTransform.modelMatrix());
+		planeMesh.draw();
 
 		// SECOND PASS (Custom Framebuffer Pass)
 		glBindFramebuffer(GL_FRAMEBUFFER, fbo);
@@ -172,10 +182,10 @@ int main() {
 		sceneShader.setFloat("_Material.Shininess", material.Shininess);
 		sceneShader.setVec3("_EyePos", camera.position);
 		sceneShader.setMat4("_Model", monkeyTransform.modelMatrix());
-		//sceneShader.setMat4("_Model", planeTransform.modelMatrix());
 		sceneShader.setMat4("_ViewProjection", camera.projectionMatrix() * camera.viewMatrix());
 		monkeyModel.draw();
-		//planeMesh.draw();
+		sceneShader.setMat4("_Model", planeTransform.modelMatrix());
+		planeMesh.draw();
 
 		// SECOND PASS (Back to Base Backbuffer)
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -192,18 +202,7 @@ int main() {
 		glBindVertexArray(dummyVAO);
 		glDrawArrays(GL_TRIANGLES, 0, 6);
 
-		/*ImGui::Begin("Shadow Map");
-		//Using a Child allow to fill all the space of the window.
-		ImGui::BeginChild("Shadow Map");
-		//Stretch image to be window size
-		ImVec2 windowSize = ImGui::GetWindowSize();
-		//Invert 0-1 V to flip vertically for ImGui display
-		//shadowMap is the texture2D handle
-		ImGui::Image((ImTextureID)shadowMap, windowSize, ImVec2(0, 1), ImVec2(1, 0));
-		ImGui::EndChild();
-		ImGui::End();*/
-
-		drawUI();
+		drawUI(shadowMap);
 
 		glfwSwapBuffers(window);
 		glfwPollEvents();
@@ -220,7 +219,7 @@ void resetCamera(ew::Camera* camera, ew::CameraController* controller) {
 	controller->yaw = controller->pitch = 0;
 }
 
-void drawUI() {
+void drawUI(unsigned int shadowMap) {
 	ImGui_ImplGlfw_NewFrame();
 	ImGui_ImplOpenGL3_NewFrame();
 	ImGui::NewFrame();
@@ -258,7 +257,16 @@ void drawUI() {
 	}
 	ImGui::End();
 
-
+	ImGui::Begin("Shadow Map");
+	//Using a Child allow to fill all the space of the window.
+	ImGui::BeginChild("Shadow Map");
+	//Stretch image to be window size
+	ImVec2 windowSize = ImGui::GetWindowSize();
+	//Invert 0-1 V to flip vertically for ImGui display
+	//shadowMap is the texture2D handle
+	ImGui::Image((ImTextureID)shadowMap, windowSize, ImVec2(0, 1), ImVec2(1, 0));
+	ImGui::EndChild();
+	ImGui::End();
 
 
 	ImGui::Render();
