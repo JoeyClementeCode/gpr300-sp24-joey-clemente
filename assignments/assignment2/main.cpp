@@ -26,6 +26,7 @@ int screenHeight = 720;
 float prevFrameTime;
 float deltaTime;
 ew::Transform monkeyTransform;
+ew::Transform planeTransform;
 ew::Camera camera;
 ew::Camera lightCamera;
 ew::CameraController cameraController;
@@ -40,7 +41,7 @@ struct Material {
 struct ColorCorrect {
 	float Exposure = 1.0;
 	float Contrast = 1.0;
-	float Brightness = 1.0;
+	float Brightness = 0.0;
 	glm::vec3 colorFilter = glm::vec3(1);
 }colorCorrect;
 
@@ -52,7 +53,7 @@ struct Light {
 
 int main() {
 	GLFWwindow* window = initWindow("Assignment 2", screenWidth, screenHeight);
-	
+
 	// Shader and Model Setup
 	ew::Shader sceneShader = ew::Shader("assets/lit.vert", "assets/lit.frag");
 	ew::Shader postProcessShader = ew::Shader("assets/postprocess.vert", "assets/postprocess.frag");
@@ -69,7 +70,6 @@ int main() {
 	camera.aspectRatio = (float)screenWidth / screenHeight;
 	camera.fov = 60.0f;
 
-	// Ortho Camera Setup
 	lightCamera.target = glm::vec3(0.0f, 0.0f, 0.0f);
 	lightCamera.position = lightCamera.target - light.lightDirection * 5.0f;
 	lightCamera.orthographic = true;
@@ -90,10 +90,12 @@ int main() {
 	glTexStorage2D(GL_TEXTURE_2D, 1, GL_RGBA16, screenWidth, screenHeight);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+	// Assigning
 	glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, frameBufferTexture, 0);
 
 	// Shadow Map and Buffer Creation
-	/*unsigned int shadowFBO, shadowMap;
+	unsigned int shadowFBO, shadowMap;
 	glCreateFramebuffers(1, &shadowFBO);
 	glBindFramebuffer(GL_FRAMEBUFFER, shadowFBO);
 
@@ -108,8 +110,7 @@ int main() {
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
 	float borderColor[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
 	glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, borderColor);
-	glFramebufferTexture(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, shadowMap, 0);*/
-
+	glFramebufferTexture(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, shadowMap, 0);
 
 	// Dummy VAO
 	unsigned int dummyVAO;
@@ -119,8 +120,9 @@ int main() {
 	static const GLenum draw_buffers[] = { GL_COLOR_ATTACHMENT0 };
 	glDrawBuffers(1, draw_buffers);
 
+	glDrawBuffer(GL_NONE);
+	glReadBuffer(GL_NONE);
 	glEnable(GL_CULL_FACE);
-	glCullFace(GL_BACK);
 	glEnable(GL_DEPTH_TEST);
 
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -142,21 +144,23 @@ int main() {
 		glm::mat4 lightProj = lightCamera.projectionMatrix();
 		glm::mat4 lightMatrix = lightProj * lightView;
 
-
-		// FIRST PASS (Custom Framebuffer Pass)
-		/*glBindFramebuffer(GL_FRAMEBUFFER, shadowFBO);
+		// FIRST PASS SHADOW BUFFER
+		glBindFramebuffer(GL_FRAMEBUFFER, shadowFBO);
 		glViewport(0, 0, 2048, 2048);
 		glClear(GL_DEPTH_BUFFER_BIT);
+		glCullFace(GL_FRONT);
 
 		shadowShader.use();
 		shadowShader.setMat4("_LightViewMatrix", lightMatrix);
 		shadowShader.setMat4("_Model", monkeyTransform.modelMatrix());
 		monkeyModel.draw();
-		planeMesh.draw();*/
+		//planeMesh.draw();
 
+		// SECOND PASS (Custom Framebuffer Pass)
 		glBindFramebuffer(GL_FRAMEBUFFER, fbo);
 		glViewport(0, 0, screenWidth, screenHeight);
-		glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+		glCullFace(GL_BACK);
 
 		// Draw Scene General Scene
 		glBindTextureUnit(0, brickTexture);
@@ -167,13 +171,11 @@ int main() {
 		sceneShader.setFloat("_Material.SpecualarCo", material.SpecualarCo);
 		sceneShader.setFloat("_Material.Shininess", material.Shininess);
 		sceneShader.setVec3("_EyePos", camera.position);
-		sceneShader.setVec3("_LightDirection", light.lightDirection);
-		sceneShader.setVec3("_LightColor", light.lightColor);
 		sceneShader.setMat4("_Model", monkeyTransform.modelMatrix());
+		//sceneShader.setMat4("_Model", planeTransform.modelMatrix());
 		sceneShader.setMat4("_ViewProjection", camera.projectionMatrix() * camera.viewMatrix());
 		monkeyModel.draw();
-		planeMesh.draw();
-
+		//planeMesh.draw();
 
 		// SECOND PASS (Back to Base Backbuffer)
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -190,8 +192,6 @@ int main() {
 		glBindVertexArray(dummyVAO);
 		glDrawArrays(GL_TRIANGLES, 0, 6);
 
-		drawUI();
-
 		/*ImGui::Begin("Shadow Map");
 		//Using a Child allow to fill all the space of the window.
 		ImGui::BeginChild("Shadow Map");
@@ -202,6 +202,8 @@ int main() {
 		ImGui::Image((ImTextureID)shadowMap, windowSize, ImVec2(0, 1), ImVec2(1, 0));
 		ImGui::EndChild();
 		ImGui::End();*/
+
+		drawUI();
 
 		glfwSwapBuffers(window);
 		glfwPollEvents();

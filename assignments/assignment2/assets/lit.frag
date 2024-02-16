@@ -8,10 +8,16 @@ in Surface{
 	vec2 TexCoord;
 }fs_in;
 
+in vec4 LightSpacePos;
+
 uniform vec3 _EyePos;
 uniform vec3 _LightDirection = vec3(0.0, -1.0, 0.0);
 uniform vec3 _LightColor = vec3(1.0);
 uniform vec3 _AmbientColor = vec3(0.3, 0.4, 0.46);
+uniform sampler2D _ShadowMap;
+
+uniform float minBias = 0.005;
+uniform float maxBias = 0.015;
 
 // Coefficients for editor
 struct Material
@@ -23,6 +29,17 @@ struct Material
 };
 
 uniform Material _Material;
+
+float calcShadow(sampler2D shadowMap, vec4 lightSpacePos, float bias)
+{
+	vec3 sampleCoord = lightSpacePos.xyz / lightSpacePos.w;
+	sampleCoord = sampleCoord * 0.5 + 0.5;
+
+	float myDepth = sampleCoord.z - bias;
+	float shadowMapDepth = texture(shadowMap, sampleCoord.xy).r;
+
+	return step(shadowMapDepth, myDepth);
+}
 
 void main()
 {
@@ -44,5 +61,10 @@ void main()
 	// Ambient
 	lightColor += _AmbientColor * _Material.AmbientCo;
 
-	FragColor = vec4(lightColor, 1.0);
+	float bias = max(maxBias * (1.0 - dot(normal, toLight)), minBias);
+	float shadow = calcShadow(_ShadowMap, LightSpacePos, bias);
+
+	vec3 light = lightColor * (1.0 - shadow);
+
+	FragColor = vec4(light, 1.0);
 }
