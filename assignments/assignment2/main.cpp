@@ -50,6 +50,10 @@ struct Light {
 	glm::vec3 lightColor = glm::vec3(1);
 }light;
 
+struct Shadow {
+	float minBias = 0.01;
+	float maxBias = 0.03;
+}shadow;
 
 int main() {
 	GLFWwindow* window = initWindow("Assignment 2", screenWidth, screenHeight);
@@ -146,8 +150,10 @@ int main() {
 		deltaTime = time - prevFrameTime;
 		prevFrameTime = time;
 
-		monkeyTransform.rotation = glm::rotate(monkeyTransform.rotation, deltaTime, glm::vec3(0.0, 1.0, 0.0));
+		//monkeyTransform.rotation = glm::rotate(monkeyTransform.rotation, deltaTime, glm::vec3(0.0, 1.0, 0.0));
 		cameraController.move(window, &camera, deltaTime);
+
+		lightCamera.position = lightCamera.target - light.lightDirection * 5.0f;
 
 		glm::mat4 lightView = lightCamera.viewMatrix();
 		glm::mat4 lightProj = lightCamera.projectionMatrix();
@@ -173,9 +179,14 @@ int main() {
 		glCullFace(GL_BACK);
 
 		// Draw Scene General Scene
-		glBindTextureUnit(0, brickTexture);
+		glBindTextureUnit(0, shadowMap);
 		sceneShader.use();
-		sceneShader.setInt("_MainTex", 0);
+		sceneShader.setInt("_ShadowMap", 0);
+		sceneShader.setMat4("_LightViewProjection", lightMatrix);
+		sceneShader.setVec3("_LightDirection", light.lightDirection);
+		sceneShader.setVec3("_LightColor", light.lightColor);
+		sceneShader.setFloat("_MinBias", shadow.minBias);
+		sceneShader.setFloat("_MaxBias", shadow.maxBias);
 		sceneShader.setFloat("_Material.AmbientCo", material.AmbientCo);
 		sceneShader.setFloat("_Material.DiffuseCo", material.DiffuseCo);
 		sceneShader.setFloat("_Material.SpecualarCo", material.SpecualarCo);
@@ -238,8 +249,16 @@ void drawUI(unsigned int shadowMap) {
 
 	if (ImGui::CollapsingHeader("Lighting"))
 	{
-		ImGui::SliderFloat3("Light Direction", &light.lightDirection.x, -10.0f, 10.0f);
+		ImGui::SliderFloat("Light Direction X", &light.lightDirection.x, -5.0f, 5.0f);
+		ImGui::SliderFloat("Light Direction Y", &light.lightDirection.y, -5.0f, 5.0f);
+		ImGui::SliderFloat("Light Direction Z", &light.lightDirection.z, -5.0f, 5.0f);
 		ImGui::ColorEdit3("Light Color", &light.lightColor.r);
+
+		if (ImGui::CollapsingHeader("Shadow"))
+		{
+			ImGui::SliderFloat("Min Bias", &shadow.minBias, 0.0f, 1.0f);
+			ImGui::SliderFloat("Max Bias", &shadow.maxBias, 0.0f, 1.0f);
+		}
 	}
 
 	// Color Correction ImGUI

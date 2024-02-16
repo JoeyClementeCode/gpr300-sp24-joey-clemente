@@ -11,13 +11,13 @@ in Surface{
 in vec4 LightSpacePos;
 
 uniform vec3 _EyePos;
-uniform vec3 _LightDirection = vec3(0.0, -1.0, 0.0);
-uniform vec3 _LightColor = vec3(1.0);
+uniform vec3 _LightDirection;
+uniform vec3 _LightColor;
 uniform vec3 _AmbientColor = vec3(0.3, 0.4, 0.46);
 uniform sampler2D _ShadowMap;
 
-uniform float minBias = 0.005;
-uniform float maxBias = 0.015;
+uniform float _MinBias = 0.005;
+uniform float _MaxBias = 0.015;
 
 // Coefficients for editor
 struct Material
@@ -36,9 +36,22 @@ float calcShadow(sampler2D shadowMap, vec4 lightSpacePos, float bias)
 	sampleCoord = sampleCoord * 0.5 + 0.5;
 
 	float myDepth = sampleCoord.z - bias;
-	float shadowMapDepth = texture(shadowMap, sampleCoord.xy).r;
 
-	return step(shadowMapDepth, myDepth);
+	float totalShadow = 0;
+	vec2 texelOffset = 1.0 / textureSize(_ShadowMap,0);
+
+	for(int y = -1; y <=1; y++)
+	{
+		for(int x = -1; x <=1; x++)
+		{
+			vec2 uv = sampleCoord.xy + vec2(x * texelOffset.x, y * texelOffset.y);
+			totalShadow+=step(texture(_ShadowMap,uv).r,myDepth);
+		}
+	}
+
+	totalShadow /= 9.0;
+
+	return totalShadow;
 }
 
 void main()
@@ -61,7 +74,7 @@ void main()
 	// Ambient
 	lightColor += _AmbientColor * _Material.AmbientCo;
 
-	float bias = max(maxBias * (1.0 - dot(normal, toLight)), minBias);
+	float bias = max(_MaxBias * (1.0 - dot(normal, toLight)), _MinBias);
 	float shadow = calcShadow(_ShadowMap, LightSpacePos, bias);
 
 	vec3 light = lightColor * (1.0 - shadow);
