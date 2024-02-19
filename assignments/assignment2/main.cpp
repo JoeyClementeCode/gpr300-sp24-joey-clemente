@@ -51,8 +51,8 @@ struct Light {
 }light;
 
 struct Shadow {
-	float minBias = 0.01;
-	float maxBias = 0.03;
+	float minBias = 0.02;
+	float maxBias = 0.2;
 }shadow;
 
 int main() {
@@ -66,7 +66,8 @@ int main() {
 	ew::Mesh planeMesh = ew::Mesh(ew::createPlane(10, 10, 5));
 
 	// Texture Loading
-	GLuint brickTexture = ew::loadTexture("assets/brick_color.jpg");
+	GLuint floorTexture = ew::loadTexture("assets/Floor_Color.jpg");
+	GLuint monkeyTexture = ew::loadTexture("assets/Monkey_Color.jpg");
 
 	// Camera Setup
 	camera.position = glm::vec3(0.0f, 0.0f, 5.0f);
@@ -180,6 +181,9 @@ int main() {
 
 		// Draw Scene General Scene
 		glBindTextureUnit(0, shadowMap);
+		glBindTextureUnit(1, monkeyTexture);
+		glBindTextureUnit(2, floorTexture);
+
 		sceneShader.use();
 		sceneShader.setInt("_ShadowMap", 0);
 		sceneShader.setMat4("_LightViewProjection", lightMatrix);
@@ -194,7 +198,9 @@ int main() {
 		sceneShader.setVec3("_EyePos", camera.position);
 		sceneShader.setMat4("_Model", monkeyTransform.modelMatrix());
 		sceneShader.setMat4("_ViewProjection", camera.projectionMatrix() * camera.viewMatrix());
+		sceneShader.setInt("_MainTex", 1);
 		monkeyModel.draw();
+		sceneShader.setInt("_MainTex", 2);
 		sceneShader.setMat4("_Model", planeTransform.modelMatrix());
 		planeMesh.draw();
 

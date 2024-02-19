@@ -15,9 +15,10 @@ uniform vec3 _LightDirection;
 uniform vec3 _LightColor;
 uniform vec3 _AmbientColor = vec3(0.3, 0.4, 0.46);
 uniform sampler2D _ShadowMap;
+uniform sampler2D _MainTex;
 
-uniform float _MinBias = 0.005;
-uniform float _MaxBias = 0.015;
+uniform float _MinBias = 0.02;
+uniform float _MaxBias = 0.2;
 
 // Coefficients for editor
 struct Material
@@ -77,7 +78,9 @@ void main()
 	float bias = max(_MaxBias * (1.0 - dot(normal, toLight)), _MinBias);
 	float shadow = calcShadow(_ShadowMap, LightSpacePos, bias);
 
+	vec3 objectColor = texture(_MainTex, fs_in.TexCoord).rgb;
+
 	vec3 light = lightColor * (1.0 - shadow);
 
-	FragColor = vec4(light, 1.0);
+	FragColor = vec4(objectColor * light, 1.0);
 }
