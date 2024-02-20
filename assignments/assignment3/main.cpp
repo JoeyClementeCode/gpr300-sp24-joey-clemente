@@ -18,7 +18,7 @@
 
 void framebufferSizeCallback(GLFWwindow* window, int width, int height);
 GLFWwindow* initWindow(const char* title, int width, int height);
-void drawUI(unsigned int shadowMap);
+
 
 //Global state
 int screenWidth = 1080;
@@ -55,8 +55,93 @@ struct Shadow {
 	float maxBias = 0.2;
 }shadow;
 
+struct Framebuffer {
+	unsigned int fbo;
+	unsigned int colorTexture[8];
+	unsigned int depthTexture;
+	unsigned int width;
+	unsigned int height;
+}framebuffer;
+
+void drawUI(Framebuffer gBuffer);
+
+Framebuffer createFrameBuffer(unsigned int width, unsigned int height, int colorFormat)
+{
+	Framebuffer buffer;
+
+	buffer.width = width;
+	buffer.height = height;
+
+	glCreateFramebuffers(1, &buffer.fbo);
+	glBindFramebuffer(GL_FRAMEBUFFER, buffer.fbo);
+
+	// Color Buffer Creation
+	glGenTextures(1, &buffer.colorTexture[0]);
+	glBindTexture(GL_TEXTURE_2D, buffer.colorTexture[0]);
+	glTexStorage2D(GL_TEXTURE_2D, 1, colorFormat, buffer.width, buffer.height);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+	// Depth Buffer Creation
+	glGenTextures(1, &buffer.depthTexture);
+	glBindTexture(GL_TEXTURE_2D, buffer.depthTexture);
+	glTexStorage2D(GL_TEXTURE_2D, 1, GL_DEPTH_COMPONENT16, screenWidth, screenHeight);
+
+	// Assigning
+	glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, buffer.colorTexture[0], 0);
+	glFramebufferTexture(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, buffer.depthTexture, 0);
+
+	return buffer;
+}
+
+Framebuffer createGBuffer(unsigned int width, unsigned int height)
+{
+	Framebuffer buffer;
+	buffer.width = width;
+	buffer.height = height;
+
+	glCreateFramebuffers(1, &buffer.fbo);
+	glBindFramebuffer(GL_FRAMEBUFFER, buffer.fbo);
+
+	int inputs[3]
+	{
+		GL_RGB32F, // World Pos
+		GL_RGB16F, // World Normal
+		GL_RGB16F // Albedo Color
+	};
+
+	for (size_t i = 0; i < 3; i++)
+	{
+		glGenTextures(1, &framebuffer.colorTexture[i]);
+		glBindTexture(GL_TEXTURE_2D, framebuffer.colorTexture[i]);
+		glTexStorage2D(GL_TEXTURE_2D, 1, inputs[i], width, height);
+		//Clamp to border so we don't wrap when sampling for post processing
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+		//Attach each texture to a different slot.
+	//GL_COLOR_ATTACHMENT0 + 1 = GL_COLOR_ATTACHMENT1, etc
+		glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + i, framebuffer.colorTexture[i], 0);
+	}
+
+	const GLenum drawBuffers[3] = {
+		GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2
+	};
+
+	glDrawBuffers(3, drawBuffers);
+
+	// Add depth buffer?
+	// Check for bugs
+
+	glBindTexture(GL_TEXTURE_2D, 0);
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+	return buffer;
+}
+
 int main() {
-	GLFWwindow* window = initWindow("Assignment 2", screenWidth, screenHeight);
+	GLFWwindow* window = initWindow("Assignment 3", screenWidth, screenHeight);
 
 	// Shader and Model Setup
 	ew::Shader sceneShader = ew::Shader("assets/lit.vert", "assets/lit.frag");
@@ -85,36 +170,9 @@ int main() {
 	lightCamera.farPlane = 25.0f;
 	lightCamera.aspectRatio = 1;
 
-	unsigned int fbo;
-	glCreateFramebuffers(1, &fbo);
-	glBindFramebuffer(GL_FRAMEBUFFER, fbo);
-
-	// Color Buffer Creation
-	unsigned int frameBufferTexture;
-	glGenTextures(1, &frameBufferTexture);
-	glBindTexture(GL_TEXTURE_2D, frameBufferTexture);
-	glTexStorage2D(GL_TEXTURE_2D, 1, GL_RGBA16, screenWidth, screenHeight);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
-	// Depth Buffer Creation
-	unsigned int depth_texture;
-	glGenTextures(1, &depth_texture);
-	glBindTexture(GL_TEXTURE_2D, depth_texture);
-	glTexStorage2D(GL_TEXTURE_2D, 1, GL_DEPTH_COMPONENT16, screenWidth, screenHeight);
-
-	// Assigning
-	glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, frameBufferTexture, 0);
-	glFramebufferTexture(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, depth_texture, 0);
-
-
-
-
-	// GBuffer Creation
-
-
-
-
+	
+	Framebuffer ppFBO = createFrameBuffer(screenWidth, screenHeight, GL_RGBA16);
+	Framebuffer GBuffer = createGBuffer(screenWidth, screenHeight);
 
 	// Shadow Map and Buffer Creation
 	unsigned int shadowFBO, shadowMap;
@@ -138,14 +196,12 @@ int main() {
 	unsigned int dummyVAO;
 	glCreateVertexArrays(1, &dummyVAO);
 
-	// Draw Buffer Setup (Just in case of multiple render textures)
-	static const GLenum draw_buffers[] = { GL_COLOR_ATTACHMENT0 };
-	glDrawBuffers(1, draw_buffers);
-
 	glDrawBuffer(GL_NONE);
 	glReadBuffer(GL_NONE);
 	glEnable(GL_CULL_FACE);
+
 	glEnable(GL_DEPTH_TEST);
+	glDepthFunc(GL_LEQUAL);
 
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	glBindTexture(GL_TEXTURE_2D, 0);
@@ -174,6 +230,7 @@ int main() {
 		glViewport(0, 0, 2048, 2048);
 		glClear(GL_DEPTH_BUFFER_BIT);
 		glCullFace(GL_FRONT);
+		//glDepthFunc(GL_LESS);
 
 		shadowShader.use();
 		shadowShader.setMat4("_ViewProjection", lightMatrix);
@@ -182,8 +239,14 @@ int main() {
 		shadowShader.setMat4("_Model", planeTransform.modelMatrix());
 		planeMesh.draw();
 
+		//glDepthFunc(GL_EQUAL);
+		glBindFramebuffer(GL_FRAMEBUFFER, GBuffer.fbo);
+		glViewport(0, 0, GBuffer.width, GBuffer.height);
+		glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
 		// SECOND PASS (Custom Framebuffer Pass)
-		glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+		glBindFramebuffer(GL_FRAMEBUFFER, ppFBO.fbo);
 		glViewport(0, 0, screenWidth, screenHeight);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 		glCullFace(GL_BACK);
@@ -224,17 +287,17 @@ int main() {
 		postProcessShader.setFloat("_Brightness", colorCorrect.Brightness);
 
 		// Fullscreen Quad
-		glBindTextureUnit(0, frameBufferTexture);
+		glBindTextureUnit(0, ppFBO.colorTexture[0]);
 		glBindVertexArray(dummyVAO);
 		glDrawArrays(GL_TRIANGLES, 0, 6);
 
-		drawUI(shadowMap);
+		drawUI(GBuffer);
 
 		glfwSwapBuffers(window);
 		glfwPollEvents();
 	}
 
-	glDeleteFramebuffers(1, &fbo);
+	glDeleteFramebuffers(1, &ppFBO.fbo);
 
 	printf("Shutting down...");
 }
@@ -245,7 +308,7 @@ void resetCamera(ew::Camera* camera, ew::CameraController* controller) {
 	controller->yaw = controller->pitch = 0;
 }
 
-void drawUI(unsigned int shadowMap) {
+void drawUI(Framebuffer gBuffer) {
 	ImGui_ImplGlfw_NewFrame();
 	ImGui_ImplOpenGL3_NewFrame();
 	ImGui::NewFrame();
@@ -291,17 +354,15 @@ void drawUI(unsigned int shadowMap) {
 	}
 	ImGui::End();
 
-	ImGui::Begin("Shadow Map");
-	//Using a Child allow to fill all the space of the window.
-	ImGui::BeginChild("Shadow Map");
-	//Stretch image to be window size
-	ImVec2 windowSize = ImGui::GetWindowSize();
-	//Invert 0-1 V to flip vertically for ImGui display
-	//shadowMap is the texture2D handle
-	ImGui::Image((ImTextureID)shadowMap, windowSize, ImVec2(0, 1), ImVec2(1, 0));
-	ImGui::EndChild();
-	ImGui::End();
-
+	ImGui::Begin("GBuffers"); 
+	{
+		ImVec2 texSize = ImVec2(gBuffer.width / 4, gBuffer.height / 4);
+		for (size_t i = 0; i < 3; i++)
+		{
+			ImGui::Image((ImTextureID)gBuffer.colorTexture[i], texSize, ImVec2(0, 1), ImVec2(1, 0));
+		}
+		ImGui::End();
+	}
 
 	ImGui::Render();
 	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
