@@ -145,6 +145,7 @@ int main() {
 
 	// Shader and Model Setup
 	ew::Shader sceneShader = ew::Shader("assets/lit.vert", "assets/lit.frag");
+	ew::Shader geometryShader = ew::Shader("assets/lit.vert", "assets/geometryPass.frag");
 	ew::Shader postProcessShader = ew::Shader("assets/postprocess.vert", "assets/postprocess.frag");
 	ew::Shader shadowShader = ew::Shader("assets/depthOnly.vert", "assets/depthOnly.frag");
 	ew::Model monkeyModel = ew::Model("assets/suzanne.obj");
@@ -244,6 +245,12 @@ int main() {
 		glViewport(0, 0, GBuffer.width, GBuffer.height);
 		glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+		geometryShader.setMat4("_ViewProjection", camera.projectionMatrix() * camera.viewMatrix());
+		geometryShader.setMat4("_Model", monkeyTransform.modelMatrix());
+		monkeyModel.draw();
+		geometryShader.setMat4("_Model", planeTransform.modelMatrix());
+		planeMesh.draw();
 
 		// SECOND PASS (Custom Framebuffer Pass)
 		glBindFramebuffer(GL_FRAMEBUFFER, ppFBO.fbo);
