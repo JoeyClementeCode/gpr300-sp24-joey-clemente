@@ -63,7 +63,7 @@ struct Framebuffer {
 	unsigned int height;
 }framebuffer;
 
-void drawUI(Framebuffer gBuffer);
+void drawUI(Framebuffer& gBuffer);
 
 Framebuffer createFrameBuffer(unsigned int width, unsigned int height, int colorFormat)
 {
@@ -145,6 +145,7 @@ int main() {
 
 	// Shader and Model Setup
 	ew::Shader sceneShader = ew::Shader("assets/lit.vert", "assets/lit.frag");
+	ew::Shader deferredShader = ew::Shader("assets/postprocess.vert", "assets/deferredLit.frag");
 	ew::Shader geometryShader = ew::Shader("assets/lit.vert", "assets/geometryPass.frag");
 	ew::Shader postProcessShader = ew::Shader("assets/postprocess.vert", "assets/postprocess.frag");
 	ew::Shader shadowShader = ew::Shader("assets/depthOnly.vert", "assets/depthOnly.frag");
@@ -243,45 +244,53 @@ int main() {
 		//glDepthFunc(GL_EQUAL);
 		glBindFramebuffer(GL_FRAMEBUFFER, GBuffer.fbo);
 		glViewport(0, 0, GBuffer.width, GBuffer.height);
-		glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+		glCullFace(GL_BACK);
+
+		glBindTextureUnit(0, shadowMap);
+		glBindTextureUnit(1, monkeyTexture);
+		glBindTextureUnit(2, floorTexture);
+
+		geometryShader.use();
 		geometryShader.setMat4("_ViewProjection", camera.projectionMatrix() * camera.viewMatrix());
+		geometryShader.setInt("_MainTex", 1);
 		geometryShader.setMat4("_Model", monkeyTransform.modelMatrix());
 		monkeyModel.draw();
 		geometryShader.setMat4("_Model", planeTransform.modelMatrix());
+		sceneShader.setInt("_MainTex", 2);
 		planeMesh.draw();
 
 		// SECOND PASS (Custom Framebuffer Pass)
 		glBindFramebuffer(GL_FRAMEBUFFER, ppFBO.fbo);
 		glViewport(0, 0, screenWidth, screenHeight);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-		glCullFace(GL_BACK);
 
 		// Draw Scene General Scene
-		glBindTextureUnit(0, shadowMap);
-		glBindTextureUnit(1, monkeyTexture);
-		glBindTextureUnit(2, floorTexture);
+		deferredShader.use();
 
-		sceneShader.use();
-		sceneShader.setInt("_ShadowMap", 0);
-		sceneShader.setMat4("_LightViewProjection", lightMatrix);
-		sceneShader.setVec3("_LightDirection", light.lightDirection);
-		sceneShader.setVec3("_LightColor", light.lightColor);
-		sceneShader.setFloat("_MinBias", shadow.minBias);
-		sceneShader.setFloat("_MaxBias", shadow.maxBias);
-		sceneShader.setFloat("_Material.AmbientCo", material.AmbientCo);
-		sceneShader.setFloat("_Material.DiffuseCo", material.DiffuseCo);
-		sceneShader.setFloat("_Material.SpecualarCo", material.SpecualarCo);
-		sceneShader.setFloat("_Material.Shininess", material.Shininess);
-		sceneShader.setVec3("_EyePos", camera.position);
-		sceneShader.setMat4("_Model", monkeyTransform.modelMatrix());
-		sceneShader.setMat4("_ViewProjection", camera.projectionMatrix() * camera.viewMatrix());
-		sceneShader.setInt("_MainTex", 1);
-		monkeyModel.draw();
-		sceneShader.setInt("_MainTex", 2);
-		sceneShader.setMat4("_Model", planeTransform.modelMatrix());
-		planeMesh.draw();
+		glBindTextureUnit(0, GBuffer.colorTexture[0]);
+		glBindTextureUnit(1, GBuffer.colorTexture[1]);
+		glBindTextureUnit(2, GBuffer.colorTexture[2]);
+		glBindTextureUnit(3, shadowMap);
+
+		deferredShader.setInt("_gPositions", 0);
+		deferredShader.setInt("_gNormals", 1);
+		deferredShader.setInt("_gAlbedo", 2);
+		deferredShader.setInt("_ShadowMap", 3);
+		deferredShader.setMat4("_LightViewProjection", lightMatrix);
+		deferredShader.setVec3("_LightDirection", light.lightDirection);
+		deferredShader.setVec3("_LightColor", light.lightColor);
+		deferredShader.setFloat("_MinBias", shadow.minBias);
+		deferredShader.setFloat("_MaxBias", shadow.maxBias);
+		deferredShader.setFloat("_Material.AmbientCo", material.AmbientCo);
+		deferredShader.setFloat("_Material.DiffuseCo", material.DiffuseCo);
+		deferredShader.setFloat("_Material.SpecualarCo", material.SpecualarCo);
+		deferredShader.setFloat("_Material.Shininess", material.Shininess);
+		deferredShader.setVec3("_EyePos", camera.position);
+		glBindVertexArray(dummyVAO);
+		glDrawArrays(GL_TRIANGLES, 0, 6);
 
 		// SECOND PASS (Back to Base Backbuffer)
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -297,6 +306,7 @@ int main() {
 		glBindTextureUnit(0, ppFBO.colorTexture[0]);
 		glBindVertexArray(dummyVAO);
 		glDrawArrays(GL_TRIANGLES, 0, 6);
+
 
 		drawUI(GBuffer);
 
@@ -315,7 +325,7 @@ void resetCamera(ew::Camera* camera, ew::CameraController* controller) {
 	controller->yaw = controller->pitch = 0;
 }
 
-void drawUI(Framebuffer gBuffer) {
+void drawUI(Framebuffer& gBuffer) {
 	ImGui_ImplGlfw_NewFrame();
 	ImGui_ImplOpenGL3_NewFrame();
 	ImGui::NewFrame();
@@ -334,9 +344,9 @@ void drawUI(Framebuffer gBuffer) {
 
 	if (ImGui::CollapsingHeader("Lighting"))
 	{
-		ImGui::SliderFloat("Light Direction X", &light.lightDirection.x, -5.0f, 5.0f);
-		ImGui::SliderFloat("Light Direction Y", &light.lightDirection.y, -5.0f, 5.0f);
-		ImGui::SliderFloat("Light Direction Z", &light.lightDirection.z, -5.0f, 5.0f);
+		ImGui::SliderFloat("Light Direction X", &light.lightDirection.x, -1.0f, 1.0f);
+		ImGui::SliderFloat("Light Direction Y", &light.lightDirection.y, -1.0f, 1.0f);
+		ImGui::SliderFloat("Light Direction Z", &light.lightDirection.z, -1.0f, 1.0f);
 		ImGui::ColorEdit3("Light Color", &light.lightColor.r);
 
 		if (ImGui::CollapsingHeader("Shadow"))
