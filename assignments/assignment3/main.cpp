@@ -103,6 +103,8 @@ Framebuffer createGBuffer(unsigned int width, unsigned int height)
 	glCreateFramebuffers(1, &buffer.fbo);
 	glBindFramebuffer(GL_FRAMEBUFFER, buffer.fbo);
 
+	glEnable(GL_DEPTH_TEST);
+
 	int inputs[3]
 	{
 		GL_RGB32F, // World Pos
@@ -112,8 +114,8 @@ Framebuffer createGBuffer(unsigned int width, unsigned int height)
 
 	for (size_t i = 0; i < 3; i++)
 	{
-		glGenTextures(1, &framebuffer.colorTexture[i]);
-		glBindTexture(GL_TEXTURE_2D, framebuffer.colorTexture[i]);
+		glGenTextures(1, &buffer.colorTexture[i]);
+		glBindTexture(GL_TEXTURE_2D, buffer.colorTexture[i]);
 		glTexStorage2D(GL_TEXTURE_2D, 1, inputs[i], width, height);
 		//Clamp to border so we don't wrap when sampling for post processing
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
@@ -122,7 +124,7 @@ Framebuffer createGBuffer(unsigned int width, unsigned int height)
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 		//Attach each texture to a different slot.
 	//GL_COLOR_ATTACHMENT0 + 1 = GL_COLOR_ATTACHMENT1, etc
-		glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + i, framebuffer.colorTexture[i], 0);
+		glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + i, buffer.colorTexture[i], 0);
 	}
 
 	const GLenum drawBuffers[3] = {
@@ -130,6 +132,12 @@ Framebuffer createGBuffer(unsigned int width, unsigned int height)
 	};
 
 	glDrawBuffers(3, drawBuffers);
+
+
+	glGenTextures(1, &buffer.depthTexture);
+	glBindTexture(GL_TEXTURE_2D, buffer.depthTexture);
+	glTexStorage2D(GL_TEXTURE_2D, 1, GL_DEPTH_COMPONENT16, screenWidth, screenHeight);
+	glFramebufferTexture(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, buffer.depthTexture, 0);
 
 	// Add depth buffer?
 	// Check for bugs
@@ -235,7 +243,20 @@ int main() {
 		//glDepthFunc(GL_LESS);
 
 		shadowShader.use();
-		shadowShader.setMat4("_ViewProjection", lightMatrix);
+		for (int x = 0; x < 8; x++)
+		{
+			for (int y = 0; y < 8; y++)
+			{
+				planeTransform.position = glm::vec3(x * 5, -1, y * 5);
+				monkeyTransform.position = glm::vec3(x * 5, 0, y * 5);
+				shadowShader.setMat4("_ViewProjection", lightMatrix);
+				shadowShader.setMat4("_Model", monkeyTransform.modelMatrix());
+				monkeyModel.draw();
+				shadowShader.setMat4("_Model", planeTransform.modelMatrix());
+				planeMesh.draw();
+			}
+		}
+
 		shadowShader.setMat4("_Model", monkeyTransform.modelMatrix());
 		monkeyModel.draw();
 		shadowShader.setMat4("_Model", planeTransform.modelMatrix());
@@ -254,13 +275,26 @@ int main() {
 		glBindTextureUnit(2, floorTexture);
 
 		geometryShader.use();
+		//geometryShader.setMat4("_LightViewProjection", lightMatrix);
 		geometryShader.setMat4("_ViewProjection", camera.projectionMatrix() * camera.viewMatrix());
-		geometryShader.setInt("_MainTex", 1);
-		geometryShader.setMat4("_Model", monkeyTransform.modelMatrix());
-		monkeyModel.draw();
-		geometryShader.setMat4("_Model", planeTransform.modelMatrix());
-		sceneShader.setInt("_MainTex", 2);
-		planeMesh.draw();
+
+		for (int x = 0; x < 8; x++)
+		{
+			for (int y = 0; y < 8; y++)
+			{
+				planeTransform.position = glm::vec3(x * 5, -1, y * 5);
+				monkeyTransform.position = glm::vec3(x * 5, 0, y * 5);
+				geometryShader.setInt("_MainTex", 1);
+				geometryShader.setMat4("_Model", monkeyTransform.modelMatrix());
+				monkeyModel.draw();
+				geometryShader.setMat4("_Model", planeTransform.modelMatrix());
+				geometryShader.setInt("_MainTex", 2);
+				planeMesh.draw();
+			}
+		}
+
+
+
 
 		// SECOND PASS (Custom Framebuffer Pass)
 		glBindFramebuffer(GL_FRAMEBUFFER, ppFBO.fbo);
@@ -275,9 +309,6 @@ int main() {
 		glBindTextureUnit(2, GBuffer.colorTexture[2]);
 		glBindTextureUnit(3, shadowMap);
 
-		deferredShader.setInt("_gPositions", 0);
-		deferredShader.setInt("_gNormals", 1);
-		deferredShader.setInt("_gAlbedo", 2);
 		deferredShader.setInt("_ShadowMap", 3);
 		deferredShader.setMat4("_LightViewProjection", lightMatrix);
 		deferredShader.setVec3("_LightDirection", light.lightDirection);
@@ -371,15 +402,13 @@ void drawUI(Framebuffer& gBuffer) {
 	}
 	ImGui::End();
 
-	ImGui::Begin("GBuffers"); 
+	ImGui::Begin("GBuffers");
+	ImVec2 texSize = ImVec2(gBuffer.width / 4, gBuffer.height / 4);
+	for (size_t i = 0; i < 3; i++)
 	{
-		ImVec2 texSize = ImVec2(gBuffer.width / 4, gBuffer.height / 4);
-		for (size_t i = 0; i < 3; i++)
-		{
-			ImGui::Image((ImTextureID)gBuffer.colorTexture[i], texSize, ImVec2(0, 1), ImVec2(1, 0));
-		}
-		ImGui::End();
+		ImGui::Image((ImTextureID)gBuffer.colorTexture[i], texSize, ImVec2(0, 1), ImVec2(1, 0));
 	}
+	ImGui::End();
 
 	ImGui::Render();
 	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
