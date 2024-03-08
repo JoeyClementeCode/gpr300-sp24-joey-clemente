@@ -25,11 +25,49 @@ struct Material
 	float Shininess;
 };
 
+struct PointLight{
+	vec3 position;
+	float radius;
+	vec4 color;
+};
+
+#define MAX_POINT_LIGHTS 64
+uniform PointLight _PointLights[MAX_POINT_LIGHTS];
+
 uniform Material _Material;
 
 uniform layout(binding = 0) sampler2D _gPositions;
 uniform layout(binding = 1) sampler2D _gNormals;
 uniform layout(binding = 2) sampler2D _gAlbedo;
+
+vec3 toLight;
+vec3 toEye;
+vec3 h;
+
+float diffuseFactor;
+float specularFactor;
+
+
+float attenuateExponential(float distance, float radius)
+{
+	float i = clamp(1.0 - pow(distance/radius,4.0),0.0,1.0);
+
+	return i * i;
+}
+
+vec3 calcPointLight(PointLight light,vec3 normal,vec3 pos)
+{
+	vec3 diff = light.position - pos;
+	//Direction toward light position
+	vec3 toLight = normalize(diff);
+	//TODO: Usual blinn-phong calculations for diffuse + specular
+	vec3 lightColor = (diffuseFactor + specularFactor) * light.color.rgb;
+	//Attenuation
+	float d = length(diff); //Distance to light
+	lightColor *= attenuateExponential(d,light.radius); //See below for attenuation options
+	return lightColor;
+}
+
 
 
 float calcShadow(sampler2D shadowMap, vec4 lightSpacePos, float bias)
@@ -60,16 +98,9 @@ float calcShadow(sampler2D shadowMap, vec4 lightSpacePos, float bias)
 vec3 calculateLighting(vec3 normal, vec3 worldPos, vec3 albedo, vec4 LightSpacePos)
 {
 
-	vec3 toLight = -_LightDirection;
-	vec3 toEye = normalize(_EyePos - worldPos);
-
 	// Diffuse
-	float diffuseFactor = max(dot(normal, toLight), 0.0);
 	vec3 diffuseColor = _LightColor * diffuseFactor;
 
-	// Specular
-	vec3 h = normalize(toLight + toEye);
-	float specularFactor = pow(max(dot(normal, h), 0.0), _Material.Shininess);
 
 	vec3 lightColor = (_Material.DiffuseCo * diffuseFactor + _Material.SpecualarCo * specularFactor) * _LightColor;
 
@@ -79,11 +110,9 @@ vec3 calculateLighting(vec3 normal, vec3 worldPos, vec3 albedo, vec4 LightSpaceP
 	float bias = max(_MaxBias * (1.0 - dot(normal, toLight)), _MinBias);
 	float shadow = calcShadow(_ShadowMap, LightSpacePos, bias);
 
-	vec3 objectColor = albedo;
-
 	vec3 light = lightColor * (1.0 - shadow);
 
-	return objectColor * light;
+	return light;
 }
 
 void main()
@@ -93,12 +122,29 @@ void main()
 	vec3 worldPos = texture(_gPositions,UV).xyz;
 	vec3 albedo = texture(_gAlbedo,UV).xyz;
 
+	vec3 totalLight = vec3(0);
+
+
+	// Global Diffuse and Specular Calulcations
+	h = normalize(toLight + toEye);
+	toLight = -_LightDirection;
+	toEye = normalize(_EyePos - worldPos);
+	diffuseFactor = max(dot(normal, toLight), 0.0);
+	specularFactor = pow(max(dot(normal, h), 0.0), _Material.Shininess);
+
 	// Light Space
 	LightSpacePos = _LightViewProjection * vec4(worldPos, 1);
 
+	totalLight += calculateLighting(normal,worldPos,albedo,LightSpacePos);
+
+	for (int i = 0; i < MAX_POINT_LIGHTS; i++)
+	{
+		totalLight += calcPointLight(_PointLights[i], normal, worldPos);
+	}
+
 	//Worldspace lighting calculations, same as in forward shading
-	vec3 lightColor = calculateLighting(normal,worldPos,albedo,LightSpacePos);
-	FragColor = vec4(albedo * lightColor,1.0);
+	//vec3 lightColor = calculateLighting(normal,worldPos,albedo,LightSpacePos);
+	FragColor = vec4(albedo * totalLight,1.0);
 }
 
 

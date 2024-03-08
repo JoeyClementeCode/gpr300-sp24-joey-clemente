@@ -50,6 +50,14 @@ struct Light {
 	glm::vec3 lightColor = glm::vec3(1);
 }light;
 
+struct PointLight {
+	glm::vec3 position;
+	float radius;
+	glm::vec4 color;
+};
+const int MAX_POINT_LIGHTS = 64;
+PointLight pointLights[MAX_POINT_LIGHTS];
+
 struct Shadow {
 	float minBias = 0.02;
 	float maxBias = 0.2;
@@ -216,6 +224,26 @@ int main() {
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	glBindTexture(GL_TEXTURE_2D, 0);
 
+	deferredShader.use();
+	int index = 0;
+	for (int x = 0; x < 8; x++)
+	{
+		for (int y = 0; y < 8; y++)
+		{
+			pointLights[index].position = glm::vec3(x * 5, -0.5, y * 5);
+			pointLights[index].radius = 5.0;
+			pointLights[index].color = glm::vec4(rand() % 255, rand() % 255, rand() % 255, 1);
+
+			//Creates prefix "_PointLights[0]." etc
+			std::string prefix = "_PointLights[" + std::to_string(index) + "].";
+			deferredShader.setVec3(prefix + "position", pointLights[index].position);
+			deferredShader.setFloat(prefix + "radius", pointLights[index].radius);
+			deferredShader.setVec4(prefix + "color", pointLights[index].color);
+			index++;
+		}
+	}
+
+
 	glfwSetFramebufferSizeCallback(window, framebufferSizeCallback);
 
 	// Render Loop
@@ -292,9 +320,6 @@ int main() {
 				planeMesh.draw();
 			}
 		}
-
-
-
 
 		// SECOND PASS (Custom Framebuffer Pass)
 		glBindFramebuffer(GL_FRAMEBUFFER, ppFBO.fbo);
