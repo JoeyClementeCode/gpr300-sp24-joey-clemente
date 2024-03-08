@@ -71,7 +71,7 @@ struct Framebuffer {
 	unsigned int height;
 }framebuffer;
 
-void drawUI(Framebuffer& gBuffer);
+void drawUI(Framebuffer& gBuffer, unsigned int shadowMap);
 
 Framebuffer createFrameBuffer(unsigned int width, unsigned int height, int colorFormat)
 {
@@ -180,10 +180,10 @@ int main() {
 
 	planeTransform.position = glm::vec3(0.0f, -1.0f, 0.0f);
 
-	lightCamera.target = glm::vec3(0.0f, 0.0f, 0.0f);
+	lightCamera.target = glm::vec3(160.0f, 0.0f, 160.0f);
 	lightCamera.position = lightCamera.target - light.lightDirection * 5.0f;
 	lightCamera.orthographic = true;
-	lightCamera.orthoHeight = 5.0f;
+	lightCamera.orthoHeight = 25.0f;
 	lightCamera.nearPlane = 0.01f;
 	lightCamera.farPlane = 25.0f;
 	lightCamera.aspectRatio = 1;
@@ -364,7 +364,7 @@ int main() {
 		glDrawArrays(GL_TRIANGLES, 0, 6);
 
 
-		drawUI(GBuffer);
+		drawUI(GBuffer, shadowMap);
 
 		glfwSwapBuffers(window);
 		glfwPollEvents();
@@ -381,7 +381,7 @@ void resetCamera(ew::Camera* camera, ew::CameraController* controller) {
 	controller->yaw = controller->pitch = 0;
 }
 
-void drawUI(Framebuffer& gBuffer) {
+void drawUI(Framebuffer& gBuffer, unsigned int shadowMap) {
 	ImGui_ImplGlfw_NewFrame();
 	ImGui_ImplOpenGL3_NewFrame();
 	ImGui::NewFrame();
@@ -425,6 +425,17 @@ void drawUI(Framebuffer& gBuffer) {
 	{
 		resetCamera(&camera, &cameraController);
 	}
+	ImGui::End();
+
+	ImGui::Begin("Shadow Map");
+	ImGui::BeginChild("Shadow Map");
+	//Stretch image to be window size
+	ImVec2 windowSize = ImGui::GetWindowSize();
+	//Invert 0-1 V to flip vertically for ImGui display
+	//shadowMap is the texture2D handle
+	ImGui::Image((ImTextureID)shadowMap, windowSize, ImVec2(0, 1), ImVec2(1, 0));
+	ImGui::EndChild();
+
 	ImGui::End();
 
 	ImGui::Begin("GBuffers");
