@@ -165,8 +165,10 @@ int main() {
 	ew::Shader geometryShader = ew::Shader("assets/lit.vert", "assets/geometryPass.frag");
 	ew::Shader postProcessShader = ew::Shader("assets/postprocess.vert", "assets/postprocess.frag");
 	ew::Shader shadowShader = ew::Shader("assets/depthOnly.vert", "assets/depthOnly.frag");
+	ew::Shader lightOrbShader = ew::Shader("assets/lightOrb.vert", "assets/lightOrb.frag");
 	ew::Model monkeyModel = ew::Model("assets/suzanne.obj");
 	ew::Mesh planeMesh = ew::Mesh(ew::createPlane(10, 10, 5));
+	ew::Mesh sphereMesh = ew::Mesh(ew::createSphere(1.0f, 8));
 
 	// Texture Loading
 	GLuint floorTexture = ew::loadTexture("assets/Floor_Color.jpg");
@@ -190,6 +192,7 @@ int main() {
 
 	
 	Framebuffer ppFBO = createFrameBuffer(screenWidth, screenHeight, GL_RGBA16);
+	Framebuffer lightOrbs = createFrameBuffer(screenWidth, screenHeight, GL_RGBA16);
 	Framebuffer GBuffer = createGBuffer(screenWidth, screenHeight);
 
 	// Shadow Map and Buffer Creation
@@ -347,6 +350,26 @@ int main() {
 		deferredShader.setVec3("_EyePos", camera.position);
 		glBindVertexArray(dummyVAO);
 		glDrawArrays(GL_TRIANGLES, 0, 6);
+
+		glBindFramebuffer(GL_READ_FRAMEBUFFER, GBuffer.fbo); //Read from gBuffer 
+		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, lightOrbs.fbo); //Write to current fbo
+		glBlitFramebuffer(0, 0, screenWidth, screenHeight, 0, 0, screenWidth, screenHeight, GL_DEPTH_BUFFER_BIT, GL_NEAREST);
+
+		//Draw all light orbs
+		lightOrbShader.use();
+		lightOrbShader.setMat4("_ViewProjection", camera.projectionMatrix() * camera.viewMatrix());
+		for (int i = 0; i < MAX_POINT_LIGHTS; i++)
+		{
+			glm::mat4 m = glm::mat4(1.0f);
+			m = glm::translate(m, pointLights[i].position);
+			m = glm::scale(m, glm::vec3(1.0f)); 
+
+			lightOrbShader.setMat4("_Model", m);
+			lightOrbShader.setVec3("_Color", pointLights[i].color);
+			sphereMesh.draw();
+		}
+
+
 
 		// SECOND PASS (Back to Base Backbuffer)
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
