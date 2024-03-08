@@ -59,7 +59,7 @@ const int MAX_POINT_LIGHTS = 64;
 PointLight pointLights[MAX_POINT_LIGHTS];
 
 struct Shadow {
-	float minBias = 0.02;
+	float minBias = 0.007;
 	float maxBias = 0.2;
 }shadow;
 
@@ -182,12 +182,12 @@ int main() {
 
 	planeTransform.position = glm::vec3(0.0f, -1.0f, 0.0f);
 
-	lightCamera.target = glm::vec3(160.0f, 0.0f, 160.0f);
-	lightCamera.position = lightCamera.target - light.lightDirection * 5.0f;
+	lightCamera.target = glm::vec3(17.5f, 0.0f, 17.5f);
+	lightCamera.position = lightCamera.target - light.lightDirection * 10.0f;
 	lightCamera.orthographic = true;
-	lightCamera.orthoHeight = 25.0f;
-	lightCamera.nearPlane = 0.01f;
-	lightCamera.farPlane = 25.0f;
+	lightCamera.orthoHeight = 40.0f;
+	lightCamera.nearPlane = 0.001f;
+	lightCamera.farPlane = 50.0f;
 	lightCamera.aspectRatio = 1;
 
 	
@@ -233,15 +233,9 @@ int main() {
 	{
 		for (int y = 0; y < 8; y++)
 		{
-			pointLights[index].position = glm::vec3(x * 5, -0.5, y * 5);
+			pointLights[index].position = glm::vec3((x * 5) + 1, -0.5, (y * 5) + 1);
 			pointLights[index].radius = 5.0;
-			pointLights[index].color = glm::vec4(rand() % 255, rand() % 255, rand() % 255, 1);
-
-			//Creates prefix "_PointLights[0]." etc
-			std::string prefix = "_PointLights[" + std::to_string(index) + "].";
-			deferredShader.setVec3(prefix + "position", pointLights[index].position);
-			deferredShader.setFloat(prefix + "radius", pointLights[index].radius);
-			deferredShader.setVec4(prefix + "color", pointLights[index].color);
+			pointLights[index].color = glm::vec4(rand() % 2, rand() % 2, rand() % 2, 1);
 			index++;
 		}
 	}
@@ -260,7 +254,7 @@ int main() {
 		//monkeyTransform.rotation = glm::rotate(monkeyTransform.rotation, deltaTime, glm::vec3(0.0, 1.0, 0.0));
 		cameraController.move(window, &camera, deltaTime);
 
-		lightCamera.position = lightCamera.target - light.lightDirection * 5.0f;
+		lightCamera.position = lightCamera.target - light.lightDirection * 10.0f;
 
 		glm::mat4 lightView = lightCamera.viewMatrix();
 		glm::mat4 lightProj = lightCamera.projectionMatrix();
@@ -348,11 +342,21 @@ int main() {
 		deferredShader.setFloat("_Material.SpecualarCo", material.SpecualarCo);
 		deferredShader.setFloat("_Material.Shininess", material.Shininess);
 		deferredShader.setVec3("_EyePos", camera.position);
+
+
+		for (int i = 0; i < MAX_POINT_LIGHTS; i++) {
+			//Creates prefix "_PointLights[0]." etc
+			std::string prefix = "_PointLights[" + std::to_string(i) + "].";
+			deferredShader.setVec3(prefix + "position", pointLights[i].position);
+			deferredShader.setFloat(prefix + "radius", pointLights[i].radius);
+			deferredShader.setVec4(prefix + "color", pointLights[i].color);
+		}
+
 		glBindVertexArray(dummyVAO);
 		glDrawArrays(GL_TRIANGLES, 0, 6);
 
 		glBindFramebuffer(GL_READ_FRAMEBUFFER, GBuffer.fbo); //Read from gBuffer 
-		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, lightOrbs.fbo); //Write to current fbo
+		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, ppFBO.fbo); //Write to current fbo
 		glBlitFramebuffer(0, 0, screenWidth, screenHeight, 0, 0, screenWidth, screenHeight, GL_DEPTH_BUFFER_BIT, GL_NEAREST);
 
 		//Draw all light orbs
@@ -362,7 +366,7 @@ int main() {
 		{
 			glm::mat4 m = glm::mat4(1.0f);
 			m = glm::translate(m, pointLights[i].position);
-			m = glm::scale(m, glm::vec3(1.0f)); 
+			m = glm::scale(m, glm::vec3(0.2f)); 
 
 			lightOrbShader.setMat4("_Model", m);
 			lightOrbShader.setVec3("_Color", pointLights[i].color);

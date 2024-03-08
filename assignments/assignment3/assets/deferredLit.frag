@@ -13,7 +13,7 @@ uniform vec3 _AmbientColor = vec3(0.3, 0.4, 0.46);
 uniform sampler2D _ShadowMap;
 uniform sampler2D _MainTex;
 
-uniform float _MinBias = 0.02;
+uniform float _MinBias = 0.007;
 uniform float _MaxBias = 0.2;
 
 // Coefficients for editor
@@ -60,6 +60,11 @@ vec3 calcPointLight(PointLight light,vec3 normal,vec3 pos)
 	vec3 diff = light.position - pos;
 	//Direction toward light position
 	vec3 toLight = normalize(diff);
+	toEye = normalize(_EyePos - pos);
+	h = normalize(toLight + toEye);
+	diffuseFactor = max(dot(normal, toLight), 0.0);
+	specularFactor = pow(max(dot(normal, h), 0.0), _Material.Shininess);
+
 	//TODO: Usual blinn-phong calculations for diffuse + specular
 	vec3 lightColor = (diffuseFactor + specularFactor) * light.color.rgb;
 	//Attenuation
@@ -98,6 +103,12 @@ float calcShadow(sampler2D shadowMap, vec4 lightSpacePos, float bias)
 vec3 calculateLighting(vec3 normal, vec3 worldPos, vec3 albedo, vec4 LightSpacePos)
 {
 
+	toEye = normalize(_EyePos - worldPos);
+	toLight = -_LightDirection;
+	h = normalize(toLight + toEye);
+	diffuseFactor = max(dot(normal, toLight), 0.0);
+	specularFactor = pow(max(dot(normal, h), 0.0), _Material.Shininess);
+
 	// Diffuse
 	vec3 diffuseColor = _LightColor * diffuseFactor;
 
@@ -125,13 +136,6 @@ void main()
 	vec3 totalLight = vec3(0);
 
 
-	// Global Diffuse and Specular Calulcations
-	h = normalize(toLight + toEye);
-	toLight = -_LightDirection;
-	toEye = normalize(_EyePos - worldPos);
-	diffuseFactor = max(dot(normal, toLight), 0.0);
-	specularFactor = pow(max(dot(normal, h), 0.0), _Material.Shininess);
-
 	// Light Space
 	LightSpacePos = _LightViewProjection * vec4(worldPos, 1);
 
@@ -144,7 +148,7 @@ void main()
 
 	//Worldspace lighting calculations, same as in forward shading
 	//vec3 lightColor = calculateLighting(normal,worldPos,albedo,LightSpacePos);
-	FragColor = vec4(albedo * totalLight,1.0);
+	FragColor = vec4(albedo * totalLight,0.0);
 }
 
 
