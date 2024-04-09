@@ -216,22 +216,26 @@ int main() {
 	Hierarchy bones;
 
 	Node torso;
+	Node shoulder;
 	Node arm;
 	Node hand;
 
 	torso.transformData.position = glm::vec3(0, 0, 0);
-	arm.transformData.position = glm::vec3(1, 0, 0);
-	arm.transformData.scale = glm::vec3(0.3, 0.3, 0.3);
-	hand.transformData.position = glm::vec3(2, -1.5, 0);
+	shoulder.transformData.position = glm::vec3(1, 0, 0);
+	shoulder.transformData.scale = glm::vec3(0.2, 0.2, 0.2);
+	arm.transformData.position = glm::vec3(0, -2, 0);
+	hand.transformData.position = glm::vec3(0, -2.5, 0);
 	hand.transformData.scale = glm::vec3(0.5, 0.5, 0.5);
 
 	bones.nodes.push_back(&torso);
+	bones.nodes.push_back(&shoulder);
 	bones.nodes.push_back(&arm);
 	bones.nodes.push_back(&hand);
 
 	torso.parentIndex = -1;
-	arm.parentIndex = 0;
-	hand.parentIndex = 1;
+	shoulder.parentIndex = 0;
+	arm.parentIndex = 1;
+	hand.parentIndex = 2;
 
 
 	Framebuffer ppFBO = createFrameBuffer(screenWidth, screenHeight, GL_RGBA16);
@@ -305,7 +309,8 @@ int main() {
 
 		
 		torso.transformData.rotation = glm::rotate(torso.transformData.rotation, deltaTime, glm::vec3(0.0, 1.0, 0.0));
-		arm.transformData.rotation = glm::rotate(arm.transformData.rotation, deltaTime, glm::vec3(1.0, 0.0, 0.0));
+		shoulder.transformData.rotation = glm::rotate(shoulder.transformData.rotation, deltaTime, glm::vec3(1.0, 0.0, 0.0));
+		arm.transformData.rotation = glm::rotate(arm.transformData.rotation, deltaTime, glm::vec3(0.0, 1.0, 0.0));
 		hand.transformData.rotation = glm::rotate(hand.transformData.rotation, deltaTime, glm::vec3(1.0, 0.0, 0.0));
 		
 
@@ -329,6 +334,8 @@ int main() {
 		planeTransform.position = glm::vec3(0, -1, 0);
 		shadowShader.setMat4("_ViewProjection", lightMatrix);
 		shadowShader.setMat4("_Model", torso.globalTransform);
+		monkeyModel.draw();
+		geometryShader.setMat4("_Model", shoulder.globalTransform);
 		monkeyModel.draw();
 		shadowShader.setMat4("_Model", arm.globalTransform);
 		monkeyModel.draw();
@@ -354,6 +361,8 @@ int main() {
 
 		geometryShader.setInt("_MainTex", 1);
 		geometryShader.setMat4("_Model", torso.globalTransform);
+		monkeyModel.draw();
+		geometryShader.setMat4("_Model", shoulder.globalTransform);
 		monkeyModel.draw();
 		geometryShader.setMat4("_Model", arm.globalTransform);
 		monkeyModel.draw();
