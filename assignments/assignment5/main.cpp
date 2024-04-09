@@ -74,14 +74,13 @@ struct Framebuffer {
 struct Node {
 	glm::mat4 localTransform;
 	glm::mat4 globalTransform;
-	Node* parent;
-	std::vector<Node*> children;
-}node;
+	unsigned int parentIndex;
+	ew::Transform transformData;
+};
 
-
-ew::Transform torso;
-ew::Transform arm;
-ew::Transform hand;
+struct Hierarchy {
+	std::vector<Node*> nodes;
+};
 
 void drawUI(Framebuffer& gBuffer, unsigned int shadowMap);
 
@@ -168,20 +167,14 @@ Framebuffer createGBuffer(unsigned int width, unsigned int height)
 	return buffer;
 }
 
-void GetFK(Node* node)
+void GetFK(Hierarchy h)
 {
-	if (node->parent == NULL)
+	for each (Node* node in h.nodes)
 	{
-		node->globalTransform = node->localTransform;
-	}
-	else
-	{
-		node->globalTransform = node->parent->globalTransform * node->localTransform;
-	}
-
-	for (int i = 0; i < node->children.size(); i++)
-	{
-		GetFK(node->children[i]);
+		if (node->parentIndex == -1)
+			node->globalTransform = node->localTransform;
+		else
+			node->globalTransform = h.nodes[node->parentIndex]->globalTransform * node->localTransform;
 	}
 }
 
@@ -219,34 +212,26 @@ int main() {
 	lightCamera.farPlane = 50.0f;
 	lightCamera.aspectRatio = 1;
 
-	
-
 	// FK Implementation
-	torso.position = glm::vec3(0, 0, 0);
-	arm.position = glm::vec3(1, 0, 0);
-	arm.scale = glm::vec3(0.2, 0.2, 0.2);
-	hand.position = glm::vec3(1, -0.5, 0);
-	hand.scale = glm::vec3(0.2, 0.2, 0.2);
+	Hierarchy bones;
 
-	Node* torsoNode = new Node();
-	Node* armNode = new Node();
-	Node* handNode = new Node();
+	Node torso;
+	Node arm;
+	Node hand;
 
-	torsoNode->localTransform = torso.modelMatrix();
-	torsoNode->children.push_back(armNode);
-	torsoNode->children.push_back(handNode);
+	torso.transformData.position = glm::vec3(0, 0, 0);
+	arm.transformData.position = glm::vec3(1, 0, 0);
+	arm.transformData.scale = glm::vec3(0.3, 0.3, 0.3);
+	hand.transformData.position = glm::vec3(2, -1.5, 0);
+	hand.transformData.scale = glm::vec3(0.5, 0.5, 0.5);
 
+	bones.nodes.push_back(&torso);
+	bones.nodes.push_back(&arm);
+	bones.nodes.push_back(&hand);
 
-	armNode->localTransform = arm.modelMatrix();
-	armNode->parent = torsoNode;
-	armNode->children.push_back(handNode);
-
-
-	handNode->localTransform = hand.modelMatrix();
-	handNode->parent = armNode;
-
-
-	GetFK(torsoNode);
+	torso.parentIndex = -1;
+	arm.parentIndex = 0;
+	hand.parentIndex = 1;
 
 
 	Framebuffer ppFBO = createFrameBuffer(screenWidth, screenHeight, GL_RGBA16);
@@ -287,11 +272,11 @@ int main() {
 
 	deferredShader.use();
 	int index = 0;
-	for (int x = 0; x < 8; x++)
+	for (int x = -1; x < 1; x++)
 	{
-		for (int y = 0; y < 8; y++)
+		for (int y = -1; y <= 1; y++)
 		{
-			pointLights[index].position = glm::vec3((x * 5) + 1, -0.5, (y * 5) + 1);
+			pointLights[index].position = glm::vec3((x * 4) + 1, -0.5, (y * 4) + 1);
 			pointLights[index].radius = 5.0;
 			pointLights[index].color = glm::vec4(rand() % 2, rand() % 2, rand() % 2, 1);
 			index++;
@@ -318,13 +303,20 @@ int main() {
 		glm::mat4 lightProj = lightCamera.projectionMatrix();
 		glm::mat4 lightMatrix = lightProj * lightView;
 
-		torso.rotation = glm::rotate(torso.rotation, deltaTime, glm::vec3(0.0, 1.0, 0.0));
+		
+		torso.transformData.rotation = glm::rotate(torso.transformData.rotation, deltaTime, glm::vec3(0.0, 1.0, 0.0));
+		arm.transformData.rotation = glm::rotate(arm.transformData.rotation, deltaTime, glm::vec3(1.0, 0.0, 0.0));
+		hand.transformData.rotation = glm::rotate(hand.transformData.rotation, deltaTime, glm::vec3(1.0, 0.0, 0.0));
+		
 
-		torsoNode->localTransform = torso.modelMatrix();
-		armNode->localTransform = arm.modelMatrix();
-		handNode->localTransform = hand.modelMatrix();
+		for each (Node *node in bones.nodes)
+		{
+			node->localTransform = node->transformData.modelMatrix();
+		}
+		
+		GetFK(bones);
 
-		GetFK(torsoNode);
+
 
 		// FIRST PASS SHADOW BUFFER
 		glBindFramebuffer(GL_FRAMEBUFFER, shadowFBO);
@@ -334,25 +326,16 @@ int main() {
 		//glDepthFunc(GL_LESS);
 
 		shadowShader.use();
-		for (int x = 0; x < 8; x++)
-		{
-			for (int y = 0; y < 8; y++)
-			{
-				planeTransform.position = glm::vec3(x * 5, -1, y * 5);
-				torso.position = glm::vec3(x * 5, 0, y * 5);
-				arm.position = glm::vec3((x * 5) + 1, 0, y * 5);
-				hand.position = glm::vec3((x * 5) + 1, -0.5, y * 5);
-				shadowShader.setMat4("_ViewProjection", lightMatrix);
-				geometryShader.setMat4("_Model", torso.modelMatrix());
-				monkeyModel.draw();
-				geometryShader.setMat4("_Model", arm.modelMatrix());
-				monkeyModel.draw();
-				geometryShader.setMat4("_Model", hand.modelMatrix());
-				monkeyModel.draw();
-				shadowShader.setMat4("_Model", planeTransform.modelMatrix());
-				planeMesh.draw();
-			}
-		}
+		planeTransform.position = glm::vec3(0, -1, 0);
+		shadowShader.setMat4("_ViewProjection", lightMatrix);
+		shadowShader.setMat4("_Model", torso.globalTransform);
+		monkeyModel.draw();
+		shadowShader.setMat4("_Model", arm.globalTransform);
+		monkeyModel.draw();
+		shadowShader.setMat4("_Model", hand.globalTransform);
+		monkeyModel.draw();
+		shadowShader.setMat4("_Model", planeTransform.modelMatrix());
+		planeMesh.draw();
 		//glDepthFunc(GL_EQUAL);
 		glBindFramebuffer(GL_FRAMEBUFFER, GBuffer.fbo);
 		glViewport(0, 0, GBuffer.width, GBuffer.height);
@@ -369,26 +352,16 @@ int main() {
 		//geometryShader.setMat4("_LightViewProjection", lightMatrix);
 		geometryShader.setMat4("_ViewProjection", camera.projectionMatrix() * camera.viewMatrix());
 
-		for (int x = 0; x < 8; x++)
-		{
-			for (int y = 0; y < 8; y++)
-			{
-				planeTransform.position = glm::vec3(x * 5, -1, y * 5);
-				torso.position = glm::vec3(x * 5, 0, y * 5);
-				arm.position = glm::vec3((x * 5) + 1, 0, y * 5);
-				hand.position = glm::vec3((x * 5) + 1, -0.5, y * 5);
-				geometryShader.setInt("_MainTex", 1);
-				geometryShader.setMat4("_Model", torso.modelMatrix());
-				monkeyModel.draw();
-				geometryShader.setMat4("_Model", arm.modelMatrix());
-				monkeyModel.draw();
-				geometryShader.setMat4("_Model", hand.modelMatrix());
-				monkeyModel.draw();
-				geometryShader.setMat4("_Model", planeTransform.modelMatrix());
-				geometryShader.setInt("_MainTex", 2);
-				planeMesh.draw();
-			}
-		}
+		geometryShader.setInt("_MainTex", 1);
+		geometryShader.setMat4("_Model", torso.globalTransform);
+		monkeyModel.draw();
+		geometryShader.setMat4("_Model", arm.globalTransform);
+		monkeyModel.draw();
+		geometryShader.setMat4("_Model", hand.globalTransform);
+		monkeyModel.draw();
+		geometryShader.setInt("_MainTex", 2);
+		geometryShader.setMat4("_Model", planeTransform.modelMatrix());
+		planeMesh.draw();
 
 		// SECOND PASS (Custom Framebuffer Pass)
 		glBindFramebuffer(GL_FRAMEBUFFER, ppFBO.fbo);
